@@ -20,11 +20,8 @@ def centralized_solver(constraints, header, params: Params, file_name):
     ##### q_torch helps with calculating the Maxcut and MIS loss faster ####
     q_torch = gen_q_mis(constraints, n, 2, torch_dtype=None, torch_device=None)
 
-
-    if params.f_input:
-        f=params.f
-    else:
-        f = int(np.sqrt(n))
+    #### f is the number of features for the HyperGNN ####
+    f = int(np.sqrt(n)) if not params.f_input else params.f
 
 
     if params.data == 'bipartite':
@@ -132,7 +129,7 @@ def centralized_solver(constraints, header, params: Params, file_name):
             map_times.append(map_time)
 
         else: ###### Gradient Descent Solver (no HyperGNN) #####
-            res, prob, train_time, map_time = GD_train (params, f, constraints, n, info, weights, file_name)
+            res, prob, train_time, map_time = GD_train(params, f, constraints, n, info, weights, file_name)
             train_times.append(train_time)
             map_times.append(map_time)
 

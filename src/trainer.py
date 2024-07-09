@@ -202,8 +202,8 @@ def centralized_train(G, params, f, C, n, info, weights, file_name):
                 break
         prev_loss=loss
 
-    with open("/Users/nasimeh/Documents/distributed_GCN-main-6/Oct12_2023/res/oversmoothing/dist_"+file_name[:-4]+".pkl", "wb") as fp:
-        pickle.dump(dist, fp)
+    # with open("/Users/nasimeh/Documents/distributed_GCN-main-6/Oct12_2023/res/oversmoothing/dist_"+file_name[:-4]+".pkl", "wb") as fp:
+    #     pickle.dump(dist, fp)
 
 
     best_out = best_out.detach().numpy()
@@ -761,8 +761,8 @@ def centralized_train_att( H, params, f, C, n, info, weights, file_name):
                 break
         prev_loss=loss
 
-    with open("/Users/nasimeh/Documents/distributed_GCN-main-6/Oct12_2023/res/oversmoothing/dist_"+file_name[:-4]+".pkl", "wb") as fp:
-        pickle.dump(dist, fp)
+    # with open("/Users/nasimeh/Documents/distributed_GCN-main-6/Oct12_2023/res/oversmoothing/dist_"+file_name[:-4]+".pkl", "wb") as fp:
+    #     pickle.dump(dist, fp)
 
 
     best_out = best_out.detach().numpy()
@@ -966,8 +966,8 @@ def centralized_train_bipartite( G, params, f, C, n, n_hyper, info, weights, fil
                 torch.save(conv2, name)
                 break
         prev_loss=loss
-    with open("/Users/nasimeh/Documents/distributed_GCN-main-6/Oct12_2023/res/oversmoothing/dist_"+file_name[:-4]+".pkl", "wb") as fp:
-        pickle.dump(dist, fp)
+    # with open("/Users/nasimeh/Documents/distributed_GCN-main-6/Oct12_2023/res/oversmoothing/dist_"+file_name[:-4]+".pkl", "wb") as fp:
+    #     pickle.dump(dist, fp)
     best_out = best_out.detach().numpy()
     best_out = {i+1: best_out[i][0] for i in range(n_hyper)}
     train_time = timeit.default_timer()-temp_time

@@ -2,12 +2,12 @@ from src.utils import generate_H_from_edges, _generate_G_from_H, generate_H_from
 import numpy as np
 import torch
 from src.timer import Timer
-from src.sampler import Sampler
+# from src.sampler import Sampler
 import timeit
 from src.trainer import  centralized_train, GD_train, centralized_train_for, centralized_train_vec_task, centralized_train_att, centralized_train_bipartite
 from src.loss import loss_maxcut_numpy_boost, loss_sat_numpy_boost, loss_maxind_numpy_boost, loss_maxind_QUBO, loss_task_numpy, loss_task_numpy_vec, loss_mincut_numpy_boost, loss_watermark
 import matplotlib.pyplot as plt
-import dgl
+# import dgl
 import random
 import os
 import networkx as nx
@@ -94,8 +94,7 @@ def centralized_solver(constraints, header, params, file_name):
             H = generate_H_from_edges(edges, n)
             G = _generate_G_from_H(H)
             name_g="./models/G/"+params['mode']+'_'+file_name[:-4]+".npy"
-            with open(name_g, 'wb') as ffff:
-                np.save(ffff,G)
+            np.save(name_g,G)
             G = torch.from_numpy(G).float()
 
     elif load:
@@ -231,84 +230,84 @@ def centralized_solver(constraints, header, params, file_name):
     return reses, reses_th, probs, timeit.default_timer() - temp_time, train_times, map_times
 
 #### solver for multi-gpu (distributed) training ####
-def centralized_solver_for(constraints, header, params, file_name):
-    temp_time = timeit.default_timer()
-    edges = [[abs(x) - 1 for x in edge] for edge in constraints]
-    n = header['num_nodes']
+# def centralized_solver_for(constraints, header, params, file_name):
+#     temp_time = timeit.default_timer()
+#     edges = [[abs(x) - 1 for x in edge] for edge in constraints]
+#     n = header['num_nodes']
 
-    f = int(np.sqrt(n))
-    #f=n // 2
+#     f = int(np.sqrt(n))
+#     #f=n // 2
 
-    info = {x+1:[] for x in range(n)}
-    for constraint in constraints:
-        for node in constraint:
-            info[abs(node)].append(constraint)
+#     info = {x+1:[] for x in range(n)}
+#     for constraint in constraints:
+#         for node in constraint:
+#             info[abs(node)].append(constraint)
 
-    all_weights = [[1.0 for c in (constraints)] for i in range(params['num_samples'])]
-    weights = [all_to_weights(all_weights[i], n, constraints) for i in range(len(all_weights))]
-    # sampler initialization
-    sampler = Sampler(params, n, f)
-    # timer initialization
-    reses = []
-    reses2 = []
-    reses_th = []
-    probs = []
-    for i in range(params['K']):
-        #print(weights)
-        scores = []
-        scores2 = []
-        scores_th = []
-        scores1 = []
-        Xs = sampler.get_Xs(i)
-        temp_weights = []
-        for j in range(params['num_samples']):
-            #res, res2, prob = centralized_train(Xs[j], Gn, params, f, constraints, n, info, weights[i])
-            if not params["GD"]:
-                res,  prob , train_time, map_time= centralized_train_for(Xs[j], params, f, constraints, n, info, weights[i], file_name)
-            else:
-                res, prob, train_time, map_time = GD_train(Xs[j], Gn, params, f, constraints, n, info, weights[i], file_name)
+#     all_weights = [[1.0 for c in (constraints)] for i in range(params['num_samples'])]
+#     weights = [all_to_weights(all_weights[i], n, constraints) for i in range(len(all_weights))]
+#     # sampler initialization
+#     sampler = Sampler(params, n, f)
+#     # timer initialization
+#     reses = []
+#     reses2 = []
+#     reses_th = []
+#     probs = []
+#     for i in range(params['K']):
+#         #print(weights)
+#         scores = []
+#         scores2 = []
+#         scores_th = []
+#         scores1 = []
+#         Xs = sampler.get_Xs(i)
+#         temp_weights = []
+#         for j in range(params['num_samples']):
+#             #res, res2, prob = centralized_train(Xs[j], Gn, params, f, constraints, n, info, weights[i])
+#             if not params["GD"]:
+#                 res,  prob , train_time, map_time= centralized_train_for(Xs[j], params, f, constraints, n, info, weights[i], file_name)
+#             else:
+#                 res, prob, train_time, map_time = GD_train(Xs[j], Gn, params, f, constraints, n, info, weights[i], file_name)
 
-            res_th = {x: 0 if prob[x] < 0.5 else 1 for x in prob.keys()}
-            if params['mode'] == 'sat':
-                score, new_w = loss_sat_numpy_boost(res, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
-                scores.append(score)
-            elif params['mode'] == 'maxcut':
-                score, new_w = loss_maxcut_numpy_boost(res, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
-                score_th, _ =  loss_maxcut_numpy_boost(res_th, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
-                scores.append(score)
-                scores_th.append(score_th)
-            elif params['mode'] == 'maxind':
-                res_feas=Maxind_postprocessing(res,constraints, n)
-                score, score1, new_w = loss_maxind_numpy_boost(res, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
-                score_th, score1, new_w = loss_maxind_numpy_boost(res_th, constraints, [1 for i in range(len(constraints))],inc=params['boosting_mapping'])
-                print(score, score1)
-                scores.append(score)
-                scores1.append(score1)
-                scores_th.append(score_th)
-                #score2, score12, new_w2 = loss_maxind_numpy_boost(res2, constraints, [1 for i in range(len(constraints))],inc=params['boosting_mapping'])
-                #scores2.append(score2)
-            elif params['mode'] == 'QUBO':
-                res_feas = Maxind_postprocessing(res, constraints, n)
-                res_th_feas = Maxind_postprocessing(res_th, constraints, n)
-                score = loss_maxind_QUBO(torch.Tensor(list(res_feas.values())), q_torch)
-                # score_old, score1, _ = loss_maxind_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
-                #                                                inc=params['boosting_mapping'])
-                score_th = loss_maxind_QUBO(torch.Tensor(list(res_th_feas.values())), q_torch)
-                scores.append(score)
-                scores_th.append(score_th)
-                #scores1.append(score1)
-                #print(score1)
-                # print(score_old)
-                #score2 = loss_maxind_QUBO(torch.Tensor(list(res2.values())), q_torch)
-                #scores2.append(score2)
-            # score, _ = loss_maxcut_numpy_boost(res, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
-            # scores.append(score)
-            probs.append(prob)
-        sampler.update(scores)
-        reses.append(scores)
-        #reses2.append(scores2)
-        reses_th.append(scores_th)
-    return reses, reses2, reses_th, probs, timeit.default_timer() - temp_time, train_time, map_time
+#             res_th = {x: 0 if prob[x] < 0.5 else 1 for x in prob.keys()}
+#             if params['mode'] == 'sat':
+#                 score, new_w = loss_sat_numpy_boost(res, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
+#                 scores.append(score)
+#             elif params['mode'] == 'maxcut':
+#                 score, new_w = loss_maxcut_numpy_boost(res, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
+#                 score_th, _ =  loss_maxcut_numpy_boost(res_th, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
+#                 scores.append(score)
+#                 scores_th.append(score_th)
+#             elif params['mode'] == 'maxind':
+#                 res_feas=Maxind_postprocessing(res,constraints, n)
+#                 score, score1, new_w = loss_maxind_numpy_boost(res, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
+#                 score_th, score1, new_w = loss_maxind_numpy_boost(res_th, constraints, [1 for i in range(len(constraints))],inc=params['boosting_mapping'])
+#                 print(score, score1)
+#                 scores.append(score)
+#                 scores1.append(score1)
+#                 scores_th.append(score_th)
+#                 #score2, score12, new_w2 = loss_maxind_numpy_boost(res2, constraints, [1 for i in range(len(constraints))],inc=params['boosting_mapping'])
+#                 #scores2.append(score2)
+#             elif params['mode'] == 'QUBO':
+#                 res_feas = Maxind_postprocessing(res, constraints, n)
+#                 res_th_feas = Maxind_postprocessing(res_th, constraints, n)
+#                 score = loss_maxind_QUBO(torch.Tensor(list(res_feas.values())), q_torch)
+#                 # score_old, score1, _ = loss_maxind_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
+#                 #                                                inc=params['boosting_mapping'])
+#                 score_th = loss_maxind_QUBO(torch.Tensor(list(res_th_feas.values())), q_torch)
+#                 scores.append(score)
+#                 scores_th.append(score_th)
+#                 #scores1.append(score1)
+#                 #print(score1)
+#                 # print(score_old)
+#                 #score2 = loss_maxind_QUBO(torch.Tensor(list(res2.values())), q_torch)
+#                 #scores2.append(score2)
+#             # score, _ = loss_maxcut_numpy_boost(res, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
+#             # scores.append(score)
+#             probs.append(prob)
+#         sampler.update(scores)
+#         reses.append(scores)
+#         #reses2.append(scores2)
+#         reses_th.append(scores_th)
+#     return reses, reses2, reses_th, probs, timeit.default_timer() - temp_time, train_time, map_time
 
 
 
@@ -507,243 +506,243 @@ def QUBO_solver(params):
 
 
 
-def centralized_solver_watermark(constraints, watermark_cons, watermark_nodes, wat_type, header, params, file_name):
-    temp_time = timeit.default_timer()
+# def centralized_solver_watermark(constraints, watermark_cons, watermark_nodes, wat_type, header, params, file_name):
+#     temp_time = timeit.default_timer()
 
-    n = header['num_nodes']
-    # if params['data'] != 'hypergraph' and  params['data'] != 'task' and params['data'] != 'uf' and params['data'] != 'NDC':
-    q_torch = gen_q_mis(constraints, n, 2, torch_dtype=None, torch_device=None)
-    if params['f_input']:
-        f = params['f']
-    else:
-        f = int(np.sqrt(n))
+#     n = header['num_nodes']
+#     # if params['data'] != 'hypergraph' and  params['data'] != 'task' and params['data'] != 'uf' and params['data'] != 'NDC':
+#     q_torch = gen_q_mis(constraints, n, 2, torch_dtype=None, torch_device=None)
+#     if params['f_input']:
+#         f = params['f']
+#     else:
+#         f = int(np.sqrt(n))
 
-    if params['data'] == 'bipartite':
-        path = params['folder_path_hyper'] + file_name[:-14] + '.txt'
-        constraints_hyper, header_hyper = read_hypergraph(path)
-        n_hyper = header_hyper['num_nodes']
+#     if params['data'] == 'bipartite':
+#         path = params['folder_path_hyper'] + file_name[:-14] + '.txt'
+#         constraints_hyper, header_hyper = read_hypergraph(path)
+#         n_hyper = header_hyper['num_nodes']
 
-    constraints=[con.append("Main") for con in constraints]
-    watermark_cons=[con.append("Watermark") for con in watermark_cons]
+#     constraints=[con.append("Main") for con in constraints]
+#     watermark_cons=[con.append("Watermark") for con in watermark_cons]
 
-    Constraints_tot= constraints+watermark_cons
-    header_tot=header
-    header_tot['num_constraints']=len(Constraints_tot)
-    info = {x + 1: [] for x in range(n)}
-    for constraint in Constraints_tot:
-        if params['data'] == 'task':
-            for node in constraint[:-2]:
-                info[abs(node)].append(constraint)
-        else:
-            for node in constraint[:-1]:
-                info[abs(node)].append(constraint)
+#     Constraints_tot= constraints+watermark_cons
+#     header_tot=header
+#     header_tot['num_constraints']=len(Constraints_tot)
+#     info = {x + 1: [] for x in range(n)}
+#     for constraint in Constraints_tot:
+#         if params['data'] == 'task':
+#             for node in constraint[:-2]:
+#                 info[abs(node)].append(constraint)
+#         else:
+#             for node in constraint[:-1]:
+#                 info[abs(node)].append(constraint)
 
-    if params['data'] == 'bipartite':
-        info_hyper = {x + 1: [] for x in range(n_hyper)}
-        for constraint in constraints_hyper:
-            if params['data'] == 'task':
-                for node in constraint[:-1]:
-                    info_hyper[abs(node)].append(constraint)
-            else:
-                for node in constraint:
-                    info_hyper[abs(node)].append(constraint)
+#     if params['data'] == 'bipartite':
+#         info_hyper = {x + 1: [] for x in range(n_hyper)}
+#         for constraint in constraints_hyper:
+#             if params['data'] == 'task':
+#                 for node in constraint[:-1]:
+#                     info_hyper[abs(node)].append(constraint)
+#             else:
+#                 for node in constraint:
+#                     info_hyper[abs(node)].append(constraint)
 
 
-    sparsify = False
-    spars_p = 0.8
-    if sparsify:
-        constraints_sparse, header_sparse, info_sparse = sparsify_graph(constraints, header, info, spars_p)
-    else:
-        constraints_sparse, header_sparse, info_sparse = Constraints_tot, header_tot, info
+#     sparsify = False
+#     spars_p = 0.8
+#     if sparsify:
+#         constraints_sparse, header_sparse, info_sparse = sparsify_graph(constraints, header, info, spars_p)
+#     else:
+#         constraints_sparse, header_sparse, info_sparse = Constraints_tot, header_tot, info
 
-    if params['data'] != 'task':
-        edges = [[abs(x) - 1 for x in edge[:-1]] for edge in constraints_sparse]
-    else:
-        edges = [[abs(x) - 1 for x in edge[:-2]] for edge in constraints_sparse]
+#     if params['data'] != 'task':
+#         edges = [[abs(x) - 1 for x in edge[:-1]] for edge in constraints_sparse]
+#     else:
+#         edges = [[abs(x) - 1 for x in edge[:-2]] for edge in constraints_sparse]
 
-    # load = False
-    load = False
-    if params['random_init'] == 'none' and not load:
-        if params['data'] != 'hypergraph' and params['data'] != 'task' and params['data'] != 'uf' and params[
-            'data'] != 'NDC':
-            G = get_normalized_G_from_con(constraints_sparse, header_sparse)
-        else:
-            H = generate_H_from_edges(edges, n)
-            G = _generate_G_from_H(H)
-            name_g = "./models/G/" + params['mode'] + '_' + file_name[:-4] + ".npy"
-            with open(name_g, 'wb') as ffff:
-                np.save(ffff, G)
-            G = torch.from_numpy(G).float()
-    elif load:
-        name_g = "./models/G/" + params['mode'] + '_' + file_name[:-4] + ".npy"
-        G = np.load(name_g)
-        G = torch.from_numpy(G).float()
-    else:
-        G = torch.zeros([n, n])
+#     # load = False
+#     load = False
+#     if params['random_init'] == 'none' and not load:
+#         if params['data'] != 'hypergraph' and params['data'] != 'task' and params['data'] != 'uf' and params[
+#             'data'] != 'NDC':
+#             G = get_normalized_G_from_con(constraints_sparse, header_sparse)
+#         else:
+#             H = generate_H_from_edges(edges, n)
+#             G = _generate_G_from_H(H)
+#             name_g = "./models/G/" + params['mode'] + '_' + file_name[:-4] + ".npy"
+#             with open(name_g, 'wb') as ffff:
+#                 np.save(ffff, G)
+#             G = torch.from_numpy(G).float()
+#     elif load:
+#         name_g = "./models/G/" + params['mode'] + '_' + file_name[:-4] + ".npy"
+#         G = np.load(name_g)
+#         G = torch.from_numpy(G).float()
+#     else:
+#         G = torch.zeros([n, n])
 
-    all_weights = [[1.0 for c in (Constraints_tot)] for i in range(params['num_samples'])]
-    if params['data'] != 'task':
-        weights = [all_to_weights(all_weights[i], n, Constraints_tot) for i in range(len(all_weights))]
-    else:
-        weights = [all_to_weights_task(all_weights[i], n, Constraints_tot) for i in range(len(all_weights))]
-    # sampler initialization
-    sampler = Sampler(params, n, f)
-    # timer initialization
-    reses = []
-    reses2 = []
-    reses_th = []
-    probs = []
-    train_times = []
-    map_times = []
-    for i in range(params['K']):
-        # print(weights)
-        scores = []
-        scores2 = []
-        scores_th = []
-        scores1 = []
-        Xs = sampler.get_Xs(i)
-        temp_weights = []
-        for j in range(params['num_samples']):
-            # res, res2, prob = centralized_train(Xs[j], Gn, params, f, constraints, n, info, weights[i])
-            if params["mode"] == 'task_vec':
-                C_dic = {}
-                ic = 0
-                lenc = torch.zeros([len(Constraints_tot)])
-                for c in Constraints_tot:
-                    lenc[ic] = len(c)
-                    C_dic[str(c)] = ic
-                    ic += 1
+#     all_weights = [[1.0 for c in (Constraints_tot)] for i in range(params['num_samples'])]
+#     if params['data'] != 'task':
+#         weights = [all_to_weights(all_weights[i], n, Constraints_tot) for i in range(len(all_weights))]
+#     else:
+#         weights = [all_to_weights_task(all_weights[i], n, Constraints_tot) for i in range(len(all_weights))]
+#     # sampler initialization
+#     sampler = Sampler(params, n, f)
+#     # timer initialization
+#     reses = []
+#     reses2 = []
+#     reses_th = []
+#     probs = []
+#     train_times = []
+#     map_times = []
+#     for i in range(params['K']):
+#         # print(weights)
+#         scores = []
+#         scores2 = []
+#         scores_th = []
+#         scores1 = []
+#         Xs = sampler.get_Xs(i)
+#         temp_weights = []
+#         for j in range(params['num_samples']):
+#             # res, res2, prob = centralized_train(Xs[j], Gn, params, f, constraints, n, info, weights[i])
+#             if params["mode"] == 'task_vec':
+#                 C_dic = {}
+#                 ic = 0
+#                 lenc = torch.zeros([len(Constraints_tot)])
+#                 for c in Constraints_tot:
+#                     lenc[ic] = len(c)
+#                     C_dic[str(c)] = ic
+#                     ic += 1
 
-                leninfo = torch.zeros([n])
-                for inn in range(n):
-                    leninfo[inn] = len(info[inn + 1])
+#                 leninfo = torch.zeros([n])
+#                 for inn in range(n):
+#                     leninfo[inn] = len(info[inn + 1])
 
-                res, prob, train_time, map_time = centralized_train_vec_task(Xs[j], G, params, f, Constraints_tot, n, info,
-                                                                             weights[0], file_name, C_dic, lenc,
-                                                                             leninfo)
-                train_times.append(train_time)
-                map_times.append(map_time)
-            elif params["data"] == 'bipartite':
-                res, prob, train_time, map_time = centralized_train_bipartite(Xs[j], G, params, f, constraints_hyper, n,
-                                                                              n_hyper, info_hyper, weights[0],
-                                                                              file_name)
-                train_times.append(train_time)
-                map_times.append(map_time)
-            elif not params["GD"] and not params["Att"]:
-                res, prob, train_time, map_time = centralized_train_watermark(Xs[j], G, params, f, constraints, watermark_cons, watermark_nodes, n, info,
-                                                                    weights[0], file_name)
-                train_times.append(train_time)
-                map_times.append(map_time)
-            elif params["Att"]:
-                res, prob, train_time, map_time = centralized_train_att(Xs[j], H, params, f, constraints, n, info,
-                                                                        weights[0], file_name)
-                train_times.append(train_time)
-                map_times.append(map_time)
-            else:
-                res, prob, train_time, map_time = GD_train(Xs[j], G, params, f, constraints, n, info, weights[0],
-                                                           file_name)
-                train_times.append(train_time)
-                map_times.append(map_time)
-            if params["mode"] != 'task_vec':
-                res_th = {x: 0 if prob[x] < 0.5 else 1 for x in prob.keys()}
-            else:
-                res_th = {x: [0 if prob[x, i] < 0.5 else 1 for i in range(len(Constraints_tot))] for x in range(n)}
+#                 res, prob, train_time, map_time = centralized_train_vec_task(Xs[j], G, params, f, Constraints_tot, n, info,
+#                                                                              weights[0], file_name, C_dic, lenc,
+#                                                                              leninfo)
+#                 train_times.append(train_time)
+#                 map_times.append(map_time)
+#             elif params["data"] == 'bipartite':
+#                 res, prob, train_time, map_time = centralized_train_bipartite(Xs[j], G, params, f, constraints_hyper, n,
+#                                                                               n_hyper, info_hyper, weights[0],
+#                                                                               file_name)
+#                 train_times.append(train_time)
+#                 map_times.append(map_time)
+#             elif not params["GD"] and not params["Att"]:
+#                 res, prob, train_time, map_time = centralized_train_watermark(Xs[j], G, params, f, constraints, watermark_cons, watermark_nodes, n, info,
+#                                                                     weights[0], file_name)
+#                 train_times.append(train_time)
+#                 map_times.append(map_time)
+#             elif params["Att"]:
+#                 res, prob, train_time, map_time = centralized_train_att(Xs[j], H, params, f, constraints, n, info,
+#                                                                         weights[0], file_name)
+#                 train_times.append(train_time)
+#                 map_times.append(map_time)
+#             else:
+#                 res, prob, train_time, map_time = GD_train(Xs[j], G, params, f, constraints, n, info, weights[0],
+#                                                            file_name)
+#                 train_times.append(train_time)
+#                 map_times.append(map_time)
+#             if params["mode"] != 'task_vec':
+#                 res_th = {x: 0 if prob[x] < 0.5 else 1 for x in prob.keys()}
+#             else:
+#                 res_th = {x: [0 if prob[x, i] < 0.5 else 1 for i in range(len(Constraints_tot))] for x in range(n)}
 
-            if params['mode'] == 'sat':
-                res = wat_postprocessing(res, watermark_nodes, watermark_cons, n)
-                score, new_w = loss_sat_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
-                                                    inc=params['boosting_mapping'])
-                scores.append(score)
-                score, new_w = loss_sat_numpy_boost(res_th, constraints, [1 for i in range(len(constraints))],
-                                                    inc=params['boosting_mapping'])
-                scores_th.append(score)
-                wat_score=loss_watermark(res,watermark_nodes, watermark_cons, wat_type)
-            elif params['mode'] == 'maxcut' or params['mode'] == 'QUBO_maxcut' or params['mode'] == 'maxcut_annea':
-                res=wat_postprocessing(res, watermark_nodes, watermark_cons, n)
-                res_wat=[res[node] for node in watermark_nodes]
-                if params['data'] == 'bipartite':
-                    score, new_w = loss_maxcut_numpy_boost(res, constraints_hyper,
-                                                           [1 for i in range(len(constraints_hyper))],
-                                                           inc=params['boosting_mapping'])
-                    score_th, _ = loss_maxcut_numpy_boost(res_th, constraints_hyper,
-                                                          [1 for i in range(len(constraints_hyper))],
-                                                          inc=params['boosting_mapping'])
-                else:
-                    score, new_w = loss_maxcut_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
-                                                           inc=params['boosting_mapping'])
-                    score_th, _ = loss_maxcut_numpy_boost(res_th, constraints, [1 for i in range(len(constraints))],
-                                                          inc=params['boosting_mapping'])
-                    wat_score = loss_watermark(res_wat, watermark_cons, wat_type)
-                scores.append(score)
-                scores_th.append(score_th)
-            elif params['mode'] == 'maxind':
-                res = wat_postprocessing(res, watermark_nodes, watermark_cons, n)
-                res= Maxind_postprocessing(res, constraints, n)
-                score, score1, new_w = loss_maxind_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
-                                                               inc=params['boosting_mapping'])
-                score_th, score1, new_w = loss_maxind_numpy_boost(res_th, constraints,
-                                                                  [1 for i in range(len(constraints))],
-                                                                  inc=params['boosting_mapping'])
-                wat_score = loss_watermark(res_wat, watermark_cons, wat_type)
+#             if params['mode'] == 'sat':
+#                 res = wat_postprocessing(res, watermark_nodes, watermark_cons, n)
+#                 score, new_w = loss_sat_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
+#                                                     inc=params['boosting_mapping'])
+#                 scores.append(score)
+#                 score, new_w = loss_sat_numpy_boost(res_th, constraints, [1 for i in range(len(constraints))],
+#                                                     inc=params['boosting_mapping'])
+#                 scores_th.append(score)
+#                 wat_score=loss_watermark(res,watermark_nodes, watermark_cons, wat_type)
+#             elif params['mode'] == 'maxcut' or params['mode'] == 'QUBO_maxcut' or params['mode'] == 'maxcut_annea':
+#                 res=wat_postprocessing(res, watermark_nodes, watermark_cons, n)
+#                 res_wat=[res[node] for node in watermark_nodes]
+#                 if params['data'] == 'bipartite':
+#                     score, new_w = loss_maxcut_numpy_boost(res, constraints_hyper,
+#                                                            [1 for i in range(len(constraints_hyper))],
+#                                                            inc=params['boosting_mapping'])
+#                     score_th, _ = loss_maxcut_numpy_boost(res_th, constraints_hyper,
+#                                                           [1 for i in range(len(constraints_hyper))],
+#                                                           inc=params['boosting_mapping'])
+#                 else:
+#                     score, new_w = loss_maxcut_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
+#                                                            inc=params['boosting_mapping'])
+#                     score_th, _ = loss_maxcut_numpy_boost(res_th, constraints, [1 for i in range(len(constraints))],
+#                                                           inc=params['boosting_mapping'])
+#                     wat_score = loss_watermark(res_wat, watermark_cons, wat_type)
+#                 scores.append(score)
+#                 scores_th.append(score_th)
+#             elif params['mode'] == 'maxind':
+#                 res = wat_postprocessing(res, watermark_nodes, watermark_cons, n)
+#                 res= Maxind_postprocessing(res, constraints, n)
+#                 score, score1, new_w = loss_maxind_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
+#                                                                inc=params['boosting_mapping'])
+#                 score_th, score1, new_w = loss_maxind_numpy_boost(res_th, constraints,
+#                                                                   [1 for i in range(len(constraints))],
+#                                                                   inc=params['boosting_mapping'])
+#                 wat_score = loss_watermark(res_wat, watermark_cons, wat_type)
 
-                print(score, score1)
-                scores.append(score)
-                scores1.append(score1)
-                scores_th.append(score_th)
-                # score2, score12, new_w2 = loss_maxind_numpy_boost(res2, constraints, [1 for i in range(len(constraints))],inc=params['boosting_mapping'])
-                # scores2.append(score2)
-            elif params['mode'] == 'QUBO':
-                res_fes=wat_postprocessing(res, watermark_nodes, watermark_cons, n)
-                res_feas = Maxind_postprocessing(res, constraints, n)
-                res_th_feas = Maxind_postprocessing(res_th, Constraints_tot, n)
-                score = loss_maxind_QUBO(torch.Tensor(list(res_feas.values())), q_torch)
-                # score_old, score1, _ = loss_maxind_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
-                #                                                inc=params['boosting_mapping'])
-                score_th = loss_maxind_QUBO(torch.Tensor(list(res_th_feas.values())), q_torch)
-                scores.append(score)
-                scores_th.append(score_th)
-                # scores1.append(score1)
-                # print(score1)
-                # print(score_old)
-                # score2 = loss_maxind_QUBO(torch.Tensor(list(res2.values())), q_torch)
-                # scores2.append(score2)
-                wat_score = loss_watermark(res_wat, watermark_cons, wat_type)
-            elif params['mode'] == 'task':
-                # res_feas = Task_postprocessing(res, constraints, n)
-                # res_th_feas = Maxind_postprocessing(res_th, constraints, n)
-                score = loss_task_numpy(res, constraints, [1 for i in range(len(constraints))], penalty=0, hyper=False)
-                # score_old, score1, _ = loss_maxind_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
-                #                                                inc=params['boosting_mapping'])
-                score_th = loss_task_numpy(res_th, constraints, [1 for i in range(len(constraints))], penalty=0,
-                                           hyper=False)
-                scores.append(score)
-                scores_th.append(score_th)
-            elif params['mode'] == 'task_vec':
-                # res_m=np.zeros([n,len(constraints)])
-                # for i in range(n):
-                #     res_m[i,:]=res[i+1]
-                leninfon = torch.Tensor.numpy(leninfo)
-                lencn = torch.Tensor.numpy(lenc)
-                score = loss_task_numpy_vec(res, lencn, leninfon)
-                res_th_array = np.array(list(res_th.values()))
-                score_th = loss_task_numpy_vec(res_th_array, lencn, leninfon)
-                scores.append(score)
-                scores_th.append(score_th)
-            elif params['mode'] == 'mincut':
-                score_im, score_cut, new_w = loss_mincut_numpy_boost(res, constraints,
-                                                                     [1 for i in range(len(constraints))],
-                                                                     inc=params['boosting_mapping'])
-                score_th_im, score_th_cut, _ = loss_mincut_numpy_boost(res_th, constraints,
-                                                                       [1 for i in range(len(constraints))],
-                                                                       inc=params['boosting_mapping'])
-                scores.append([score_im, score_cut])
-                scores_th.append([score_th_im, score_th_cut])
-            # score, _ = loss_maxcut_numpy_boost(res, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
-            # scores.append(score)
-            probs.append(prob)
-        sampler.update(scores)
-        reses.append(scores)
-        # reses2.append(scores2)
-        reses_th.append(scores_th)
-    return reses, reses2, reses_th, probs, timeit.default_timer() - temp_time, train_times, map_times
+#                 print(score, score1)
+#                 scores.append(score)
+#                 scores1.append(score1)
+#                 scores_th.append(score_th)
+#                 # score2, score12, new_w2 = loss_maxind_numpy_boost(res2, constraints, [1 for i in range(len(constraints))],inc=params['boosting_mapping'])
+#                 # scores2.append(score2)
+#             elif params['mode'] == 'QUBO':
+#                 res_fes=wat_postprocessing(res, watermark_nodes, watermark_cons, n)
+#                 res_feas = Maxind_postprocessing(res, constraints, n)
+#                 res_th_feas = Maxind_postprocessing(res_th, Constraints_tot, n)
+#                 score = loss_maxind_QUBO(torch.Tensor(list(res_feas.values())), q_torch)
+#                 # score_old, score1, _ = loss_maxind_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
+#                 #                                                inc=params['boosting_mapping'])
+#                 score_th = loss_maxind_QUBO(torch.Tensor(list(res_th_feas.values())), q_torch)
+#                 scores.append(score)
+#                 scores_th.append(score_th)
+#                 # scores1.append(score1)
+#                 # print(score1)
+#                 # print(score_old)
+#                 # score2 = loss_maxind_QUBO(torch.Tensor(list(res2.values())), q_torch)
+#                 # scores2.append(score2)
+#                 wat_score = loss_watermark(res_wat, watermark_cons, wat_type)
+#             elif params['mode'] == 'task':
+#                 # res_feas = Task_postprocessing(res, constraints, n)
+#                 # res_th_feas = Maxind_postprocessing(res_th, constraints, n)
+#                 score = loss_task_numpy(res, constraints, [1 for i in range(len(constraints))], penalty=0, hyper=False)
+#                 # score_old, score1, _ = loss_maxind_numpy_boost(res, constraints, [1 for i in range(len(constraints))],
+#                 #                                                inc=params['boosting_mapping'])
+#                 score_th = loss_task_numpy(res_th, constraints, [1 for i in range(len(constraints))], penalty=0,
+#                                            hyper=False)
+#                 scores.append(score)
+#                 scores_th.append(score_th)
+#             elif params['mode'] == 'task_vec':
+#                 # res_m=np.zeros([n,len(constraints)])
+#                 # for i in range(n):
+#                 #     res_m[i,:]=res[i+1]
+#                 leninfon = torch.Tensor.numpy(leninfo)
+#                 lencn = torch.Tensor.numpy(lenc)
+#                 score = loss_task_numpy_vec(res, lencn, leninfon)
+#                 res_th_array = np.array(list(res_th.values()))
+#                 score_th = loss_task_numpy_vec(res_th_array, lencn, leninfon)
+#                 scores.append(score)
+#                 scores_th.append(score_th)
+#             elif params['mode'] == 'mincut':
+#                 score_im, score_cut, new_w = loss_mincut_numpy_boost(res, constraints,
+#                                                                      [1 for i in range(len(constraints))],
+#                                                                      inc=params['boosting_mapping'])
+#                 score_th_im, score_th_cut, _ = loss_mincut_numpy_boost(res_th, constraints,
+#                                                                        [1 for i in range(len(constraints))],
+#                                                                        inc=params['boosting_mapping'])
+#                 scores.append([score_im, score_cut])
+#                 scores_th.append([score_th_im, score_th_cut])
+#             # score, _ = loss_maxcut_numpy_boost(res, constraints, [1 for i in range(len(constraints))], inc=params['boosting_mapping'])
+#             # scores.append(score)
+#             probs.append(prob)
+#         sampler.update(scores)
+#         reses.append(scores)
+#         # reses2.append(scores2)
+#         reses_th.append(scores_th)
+#     return reses, reses2, reses_th, probs, timeit.default_timer() - temp_time, train_times, map_times
 

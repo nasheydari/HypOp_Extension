@@ -21,15 +21,10 @@ def read_hypergraph(path):
     info = lines[0].split(' ')
     header['num_nodes'] = int(info[0])
     header['num_constraints'] = int(info[1])
-    #weights=[]
     constraints = []
-    i=0
     for con in lines[1:-1]:
         temp = con.split(' ')
-        #weights[i]=temp[0]
         constraints.append([int(x) for x in temp])
-        i += 1
-    #return constraints, weights, header
     return constraints, header
 
 def read_hypergraph_task(path):

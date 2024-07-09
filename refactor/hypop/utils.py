@@ -251,6 +251,8 @@ def mapping_distribution(best_outs, params, n, info, weights, constraints, all_w
         best_outs = {x: np.random.uniform(0,1) for x in best_outs.keys()}
     elif params['random_init'] == 'threshold':
         best_outs = {x: 0 if best_outs[x] < 0.5 else 1 for x in best_outs.keys()}
+    else:
+        raise ValueError('random_init should be one of one_half, uniform, threshold')
 
     best_score = float('inf')
     lb = float('inf')
